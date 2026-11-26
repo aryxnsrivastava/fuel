@@ -1,4 +1,5 @@
-import { loadState, deleteEntry, getProfile, saveProfile } from '../lib/store.js';
+import { loadState, deleteEntry, getProfile, saveProfile, addEntry } from '../lib/store.js';
+import { sugarMaxOf } from '../lib/plan.js';
 import { todayPayload, progressPayload, planPayload, dayPayload } from '../lib/views.js';
 import { currentPlan } from '../lib/meals.js';
 import { handle, send, readBody, tzOf, localDay, clamp, num, passcodeOn } from '../lib/util.js';
@@ -15,7 +16,7 @@ export default (req, res) => handle(req, res, async () => {
     }
     if (view === 'plan') {
       const { state, weights } = await loadState(today, 21);
-      return send(res, 200, { ...planPayload(state, weights), passcodeOn: passcodeOn() });
+      return send(res, 200, { ...planPayload(state, weights), passcodeOn: passcodeOn(), sugarMax: sugarMaxOf(state.profile) });
     }
     if (view === 'day') {
       const { state, entries } = await loadState(today, 21);
@@ -38,6 +39,17 @@ export default (req, res) => handle(req, res, async () => {
     const b = await readBody(req);
     const p = await getProfile(today);
     const g = b.goal || {};
+    if (['male', 'female'].includes(b.sex)) p.sex = b.sex;
+    if (b.sessionsPerWeek != null) p.sessionsPerWeek = clamp(Math.round(num(b.sessionsPerWeek, 4)), 0, 14);
+    if (b.setup) {
+      // first-run setup: anchor weight, body fat and lean mass on today's numbers
+      const kg = clamp(num(b.weightKg, 75), 35, 250);
+      p.startWeightKg = kg; p.bodyFatRefWeightKg = kg; p.bodyFatRefDay = today;
+      p.bodyFatPct = clamp(num(b.bodyFatPct, 20), 5, 45);
+      if (b.heightCm != null) p.heightCm = clamp(num(b.heightCm, 175), 120, 230);
+      p.setupDone = true;
+      await addEntry(today, 'weight', { kg, body_fat_pct: p.bodyFatPct });
+    }
     if (['cut', 'recomp', 'bulk'].includes(g.mode)) p.goal.mode = g.mode;
     if (['steady', 'moderate', 'aggressive'].includes(g.pace)) p.goal.pace = g.pace;
     if (g.targetBodyFatPct != null) p.goal.targetBodyFatPct = clamp(num(g.targetBodyFatPct, 12), 8, 25);
@@ -48,9 +60,9 @@ export default (req, res) => handle(req, res, async () => {
       p.bodyFatRefWeightKg = clamp(num(b.currentWeightKg, p.bodyFatRefWeightKg), 40, 150);
       p.bodyFatRefDay = today;
     }
-    if (b.heightCm != null) p.heightCm = clamp(num(b.heightCm, 180), 140, 220);
+    if (b.heightCm != null) p.heightCm = clamp(num(b.heightCm, 175), 120, 230);
     if (b.proteinPerKgFFM !== undefined) p.proteinPerKgFFM = b.proteinPerKgFFM ? clamp(num(b.proteinPerKgFFM), 1.8, 3.1) : null;
-    if (b.sugarLimitG != null) p.sugarLimitG = clamp(num(b.sugarLimitG, 36), 15, 36);
+    if (b.sugarLimitG != null) p.sugarLimitG = clamp(num(b.sugarLimitG, sugarMaxOf(p)), 15, sugarMaxOf(p));
     if (b.weeklyTreatKcal != null) p.weeklyTreatKcal = clamp(num(b.weeklyTreatKcal, 1400), 0, 2000);
     if (b.commuteKmOneWay != null) p.commuteKmOneWay = clamp(num(b.commuteKmOneWay, 2), 0, 10);
     if (b.workoutFactor != null) p.workoutFactor = clamp(num(b.workoutFactor, 0.8), 0.5, 1);
@@ -61,7 +73,7 @@ export default (req, res) => handle(req, res, async () => {
     if (typeof b.about === 'string') p.about = b.about.slice(0, 500);
     await saveProfile(p);
     const { state, weights } = await loadState(today, 21);
-    return send(res, 200, { ...planPayload(state, weights), passcodeOn: passcodeOn() });
+    return send(res, 200, { ...planPayload(state, weights), passcodeOn: passcodeOn(), sugarMax: sugarMaxOf(state.profile) });
   }
 
   send(res, 405, { error: 'Method not allowed' });

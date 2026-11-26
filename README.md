@@ -1,65 +1,65 @@
 # Fuel
 
-A personal food and training coach that runs as an iPhone home-screen app (a PWA). Everything below is free.
+An AI nutrition and training coach you text like a friend. Tell it what you ate and how you trained, and it logs everything, explains your targets for the day, and adjusts the next few days around what actually happened. It installs on your phone like a native app (a PWA).
+
+**One deployment = one person.** There are no accounts. Fork the repo, deploy your own copy with your own free keys, and it's yours. Your data lives in your own database, and nobody else's copy can see it.
 
 | Page | What it does |
 |---|---|
-| **Chat** | Tell it what you ate, how you trained, your weight, or what's in your fridge. It logs everything and can change anything in the app. Chat history is deleted after 24 h; recipes are kept. |
-| **Recipes** | A meal plan for the rest of today and tomorrow. It rebuilds itself from what you've eaten and how you've trained over the last 3 days. Also holds your saved recipes and your pantry, loves and hates. |
-| **Progress** | A 5-line daily report, plus charts for weight, calories, protein and training. |
-| **Plan** | Suggestions (none if you're on track), your projected rate and date to reach the goal, and where you update goals. |
+| **Today** | Calories and macros left, what you ate and when, what you can still have today, and *why* today's target is what it is (training, goal, last 3 days). |
+| **Chat** | Text it what you ate, how you trained, your weight, or what's in your fridge. It logs it all and can change any setting. Name a restaurant or brand and it offers to look up the real numbers. History is kept for 7 days. |
+| **Recipes** | Meals for the rest of today and tomorrow that fit your numbers, built from foods you actually eat and your pantry. Saved recipes live here too. |
+| **Progress** | Daily report, weekly brief (how much leeway you have for the rest of the week), and charts for weight, calories, protein, fat, sugar and training. |
+| **Plan** | What to tighten up, a projection to your goal, and all your settings. |
 
-**Stack:** static PWA, plus Vercel serverless functions in `/api`, plus Neon Postgres. AI is Groq. Web search is Tavily, and it only runs after you tap **Allow**.
-All the nutrition math is in `lib/plan.js` and is deterministic, so the numbers don't change depending on the AI. Every formula is cited in the app under **Plan → Sources**.
+## Deploy your own (free, about 15 min)
 
-## 1. Get the free keys (about 10 min)
+You need free accounts on GitHub, [Vercel](https://vercel.com), and [Groq](https://console.groq.com). Web lookups use [Tavily](https://tavily.com) and are optional.
 
-1. **Groq**: sign up at https://console.groq.com, go to **API Keys**, and create a key.
-2. **Neon** (the database): sign up at https://neon.tech, create a project, and copy the **connection string** (`postgresql://…`). Tables are created automatically on first use.
-3. **Tavily** (optional, for web lookups): sign up at https://tavily.com and copy the API key. The free plan is 1,000 credits a month.
-4. Choose a **passcode** so nobody else can open your data.
+### 1. Get your keys
 
-## 2. Deploy to Vercel (free)
+| Variable | Required | Where |
+|---|---|---|
+| `GROQ_API_KEY` | Yes | [console.groq.com](https://console.groq.com) → **API Keys** → Create. Free tier is plenty for one person. |
+| `APP_PASSCODE` | Strongly recommended | Any passcode you choose. Without it, anyone with your URL can see and change your data. |
+| `TAVILY_API_KEY` | Optional | [tavily.com](https://tavily.com) → API key. Free plan is 1,000 searches a month. Without it, the app just uses AI estimates. |
+| `DATABASE_URL` | Yes | Created for you in step 3. |
 
-From this folder:
+### 2. Fork and import
 
-```bash
-npx vercel login
-```
+1. Click **Fork** at the top of this page.
+2. In Vercel: **Add New → Project**, pick your fork, and before deploying open **Environment Variables** and add `GROQ_API_KEY`, `APP_PASSCODE` and (optionally) `TAVILY_API_KEY`.
+3. Click **Deploy**. The first deploy will show "No database connected" until step 3. That's expected.
 
-```bash
-npx vercel link
-```
+Or use the button (it forks for you and asks for the keys):
 
-Add each environment variable. It will prompt you for the value; pick all environments:
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Faryxnsrivastava%2Ffuel&project-name=fuel&env=GROQ_API_KEY,APP_PASSCODE&envDescription=GROQ_API_KEY%20from%20console.groq.com.%20APP_PASSCODE%20is%20any%20passcode%20you%20choose%20to%20lock%20the%20app.&envLink=https%3A%2F%2Fgithub.com%2Faryxnsrivastava%2Ffuel%23deploy-your-own-free-about-15-min)
 
-```bash
-npx vercel env add GROQ_API_KEY
-```
+### 3. Add the database
 
-```bash
-npx vercel env add DATABASE_URL
-```
+1. In your Vercel project: **Storage → Create Database → Neon** (free).
+2. When it asks for an environment variable prefix, use **`DATABASE`** so it creates `DATABASE_URL`. Connect it to Production.
+3. **Deployments → ⋯ → Redeploy** so the app picks it up. Tables are created automatically.
 
-```bash
-npx vercel env add APP_PASSCODE
-```
+### 4. Set yourself up
 
-```bash
-npx vercel env add TAVILY_API_KEY
-```
+Open your URL, enter your passcode, and fill in the short setup (sex, height, weight, a body-fat guess, workouts per week, goal). Then just start texting the chat.
 
-```bash
-npx vercel --prod
-```
+From now on, every push to your fork redeploys automatically.
 
-It prints a URL like `https://fuel-xxxx.vercel.app`.
+### 5. Put it on your phone
 
-## 3. Put it on your iPhone
+- **iPhone:** open the URL in **Safari** → **Share** → **Add to Home Screen**.
+- **Android:** open it in Chrome → **⋮** → **Install app**.
 
-1. Open the URL in **Safari**. It has to be Safari; other browsers can't add it to the home screen properly.
-2. Tap **Share**, then **Add to Home Screen**, then **Add**.
-3. Open **Fuel** from the home screen. It runs full screen like a normal app. Enter your passcode once.
+It opens full screen like a normal app, and the login is remembered for a year.
+
+## Make it yours
+
+- **About you** (Plan page, or tell the chat): city, gym, schedule, foods you eat, where you shop. The coach and meal planner read it.
+- **Coach personality:** blunt by design. The tone lives in `lib/coach.js` (`RULES`) if you want it softer.
+- **Meal style:** `lib/meals.js` (`PROMPT`).
+- **The math:** `lib/plan.js`. Every formula is cited in the app under **Plan → Sources**.
 
 ## Run it locally
 
@@ -71,12 +71,17 @@ npm install
 MOCK_AI=1 npm run dev
 ```
 
-This opens http://localhost:3000. Without `DATABASE_URL` it uses an embedded local Postgres in `.localdb/`. `MOCK_AI=1` fakes the AI so you can test without a key; to use real AI locally, put your keys in a `.env` file (see `.env.example`).
+This opens http://localhost:3000 with a local embedded database in `.localdb/` and a fake AI. To use the real AI locally, copy `.env.example` to `.env` and add your keys. `.env` is git-ignored.
 
 ## How the coach works
 
-- **Food** is estimated by the AI, rounded up about 10% because people under-report oil, sauces and drinks.
-- **Workouts** are calculated by the server from Compendium MET values, then cut by 20% on purpose. The walk to the gym (set on the Plan page) is added automatically on gym and swim days.
-- **Daily target** = resting burn (Cunningham equation) × 1.35 + today's training − your deficit. On top of that is a 3-day payback for over- or under-eating. It never goes below the energy-availability safety floor.
-- **Self-calibration**: after 2+ weeks of logs and weigh-ins, the app estimates your real maintenance from your weight trend.
-- **Discipline**: the coach is blunt. It won't approve crash diets, cheat weekends, dropping protein, or raising the treat budget. The server enforces those limits too, so it can't be talked past them.
+- **Food** is estimated by the AI and nudged about 10% high, because people under-report oil, sauces and drinks. Named restaurants and brands can be checked against real published nutrition (only after you tap **Allow**).
+- **Workouts** are calculated by the server from Compendium MET values and deliberately under-counted by 20%. Until you log a workout, the day assumes a light one.
+- **Daily target** = resting burn (Cunningham) × 1.35 + training + goal offset, plus a 3-day payback if you've been over or under. It never drops below the energy-availability safety floor.
+- **Weekly budgets:** sugar and fat flex across the week. A heavy day tightens the days after it.
+- **Self-calibration:** after 2+ weeks of logs and weigh-ins, maintenance is re-estimated from your real weight trend.
+- **Guardrails:** the chat can lower your sugar cap and treat budget but never raise them, and it won't approve crash diets. The server enforces this, so it can't be talked past it.
+
+**Stack:** static PWA + Vercel serverless functions (`/api`) + Neon Postgres, Groq for the AI, Tavily for web search. All the nutrition math is deterministic code, not the AI.
+
+*Estimates, not medical advice.*

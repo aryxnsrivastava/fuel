@@ -244,8 +244,41 @@ async function renderToday() {
   input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendToday(); } };
   $('#tcomposer').onsubmit = (e) => { e.preventDefault(); sendToday(); };
   if (todayData) drawToday();
-  try { todayData = await api('data?view=day'); drawToday(); }
+  try { todayData = await api('data?view=day'); if (!todayData.setupDone) return showSetup(); drawToday(); }
   catch (e) { if (e.message !== 'locked') $('#tscroll').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+// First run on a fresh install: a few numbers so the targets mean something from day one.
+function showSetup() {
+  view.className = '';
+  $('#title').textContent = 'Set up Fuel';
+  view.innerHTML = `
+    <form class="card goals" id="setup">
+      <p class="muted" style="margin-top:0">A few numbers so your targets fit you. Change any of it later on the Plan page or just tell the chat.</p>
+      <div class="two">
+        <div><label>Sex</label><select name="sex"><option value="male">Male</option><option value="female">Female</option></select></div>
+        <div><label>Goal</label><select name="mode"><option value="recomp">Recomp</option><option value="cut">Cut</option><option value="bulk">Lean bulk</option></select></div>
+      </div>
+      <div class="two">
+        <div><label>Height cm</label><input name="heightCm" type="number" inputmode="numeric" required placeholder="175" /></div>
+        <div><label>Weight kg</label><input name="weightKg" type="number" step="0.1" inputmode="decimal" required placeholder="70" /></div>
+      </div>
+      <div class="two">
+        <div><label>Body fat % (guess high)</label><input name="bodyFatPct" type="number" step="0.5" inputmode="decimal" required placeholder="20" /></div>
+        <div><label>Workouts / week</label><input name="sessionsPerWeek" type="number" inputmode="numeric" required value="4" /></div>
+      </div>
+      <label>About you (the coach reads this)</label><textarea name="about" rows="3" maxlength="500" placeholder="Age, city, gym, schedule, foods you eat, where you shop"></textarea>
+      <button class="btn block" style="margin-top:16px">Start</button>
+    </form>`;
+  $('#setup').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target), v = (k) => f.get(k);
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    try {
+      await api('data', { method: 'PUT', body: { setup: true, sex: v('sex'), goal: { mode: v('mode') }, heightCm: Number(v('heightCm')), weightKg: Number(v('weightKg')), bodyFatPct: Number(v('bodyFatPct')), sessionsPerWeek: Number(v('sessionsPerWeek')), about: v('about') || '' } });
+      todayData = null; route();
+    } catch (err) { btn.disabled = false; toast(err.message); }
+  };
 }
 
 async function sendToday() {
@@ -647,7 +680,7 @@ function drawPlan(d) {
           <div><label>…at weight kg</label><input name="currentWeightKg" type="number" step="0.1" inputmode="decimal" value="${est.weightKg}" /></div>
         </div>
         <div class="two">
-          <div><label>Sugar cap g/day (max 36)</label><input name="sugarLimitG" type="number" step="1" min="15" max="36" inputmode="numeric" value="${p.sugarLimitG ?? 36}" /></div>
+          <div><label>Sugar cap g/day (max ${d.sugarMax || 36})</label><input name="sugarLimitG" type="number" step="1" min="15" max="${d.sugarMax || 36}" inputmode="numeric" value="${p.sugarLimitG ?? d.sugarMax ?? 36}" /></div>
         </div>
         <div class="two">
           <div><label>Weekly treat budget kcal</label><input name="weeklyTreatKcal" type="number" step="50" inputmode="numeric" value="${p.weeklyTreatKcal}" /></div>
@@ -656,6 +689,10 @@ function drawPlan(d) {
         <div class="two">
           <div><label>Protein g/kg lean mass</label><input name="proteinPerKgFFM" type="number" step="0.1" inputmode="decimal" value="${p.proteinPerKgFFM ?? ''}" placeholder="auto (${n.proteinPerKgFFM})" /></div>
           <div><label>Height cm</label><input name="heightCm" type="number" inputmode="numeric" value="${p.heightCm}" /></div>
+        </div>
+        <div class="two">
+          <div><label>Sex (sets sugar cap)</label><select name="sex"><option value="male" ${p.sex !== 'female' ? 'selected' : ''}>Male</option><option value="female" ${p.sex === 'female' ? 'selected' : ''}>Female</option></select></div>
+          <div><label>Workouts / week</label><input name="sessionsPerWeek" type="number" inputmode="numeric" value="${p.sessionsPerWeek ?? 4}" /></div>
         </div>
         <label>Training split</label><input name="split" value="${esc(p.split)}" />
         <label>About you (the coach reads this)</label><textarea name="about" rows="3" maxlength="500" placeholder="Age, city, gym, schedule, where you shop">${esc(p.about || '')}</textarea>
@@ -668,6 +705,7 @@ function drawPlan(d) {
       <div style="margin-top:8px">${d.sources.map((s) => `<div class="source"><b>${esc(s.what)}</b><div>${esc(s.cite)}</div></div>`).join('')}</div>
       <p class="tiny">Estimates, not medical advice.</p>
     </details>
+    ${d.passcodeOn ? '' : '<p class="tiny" style="text-align:center;color:var(--warn,#f0b44c)">No passcode set: anyone with this link can see your data. Add APP_PASSCODE in Vercel.</p>'}
     <p class="tiny" style="text-align:center">Or just tell the chat.${d.passcodeOn ? ' · <a href="#" id="lock" style="color:inherit">Lock app</a>' : ''}</p>`;
 
   $('#goals').onsubmit = async (e) => {
@@ -679,7 +717,7 @@ function drawPlan(d) {
       bodyFatPct: Number(v('bodyFatPct')), currentWeightKg: Number(v('currentWeightKg')),
       weeklyTreatKcal: Number(v('weeklyTreatKcal')), sugarLimitG: Number(v('sugarLimitG')), commuteKmOneWay: Number(v('commuteKmOneWay')),
       proteinPerKgFFM: v('proteinPerKgFFM') ? Number(v('proteinPerKgFFM')) : null,
-      heightCm: Number(v('heightCm')), split: v('split'), about: v('about') || '',
+      heightCm: Number(v('heightCm')), split: v('split'), about: v('about') || '', sex: v('sex'), sessionsPerWeek: Number(v('sessionsPerWeek')),
     };
     const nd = await api('data', { method: 'PUT', body });
     recipesCache = null; toast('Goals updated'); drawPlan(nd);
