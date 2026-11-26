@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Fuel</title>
+  <meta name="description" content="Personal food, training and physique coach" />
+  <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f5f2" media="(prefers-color-scheme: light)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Fuel" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha512-CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1 id="title">Chat</h1>
+      <div id="topbar-extra"></div>
+    </header>
+    <main id="view"></main>
+    <nav class="tabbar" aria-label="Pages">
+      <a href="#today" data-tab="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg><span>Today</span></a>
+      <a href="#chat" data-tab="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Chat</span></a>
+      <a href="#recipes" data-tab="recipes"><svg viewBox="0 0 24 24"><path d="M5 11h14a7 7 0 0 1-14 0zM8 3v5M12 3v5M16 3v5"/></svg><span>Recipes</span></a>
+      <a href="#progress" data-tab="progress"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg><span>Progress</span></a>
+      <a href="#plan" data-tab="plan"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>Plan</span></a>
+    </nav>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "fuel-dev", "runtimeExecutable": "node", "runtimeArgs": ["scripts/dev-server.js"], "port": 3111, "env": { "MOCK_AI": "1", "PORT": "3111" } }
+  ]
+}

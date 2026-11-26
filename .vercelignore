@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+.localdb
+.claude
+node_modules
+scripts
