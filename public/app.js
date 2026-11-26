@@ -140,7 +140,7 @@ async function renderChat() {
 function drawStrip() {
   const t = chat.today, el = $('#strip');
   if (!t || !el) return;
-  const basis = { logged: 'uses logged training', planned: 'uses your plan', typical: 'assumes light training until you log it' }[t.exerciseBasis];
+  const basis = (t.exerciseBasis === 'logged' ? 'includes logged training' : 'no training counted until you log it');
   el.innerHTML = `
     <div class="stats">
       <div><div class="stat-label"><span>kcal</span><b class="num">${fmt(t.eaten.kcal)}/${fmt(t.target)}</b></div>${meter(t.eaten.kcal, t.target)}</div>
@@ -316,7 +316,7 @@ function drawToday() {
   if (!el || !d) return;
   const n = d.now, L = n.left, W = d.why, wk = W.week;
   const bar = (label, eaten, target, cls) => `<div><div class="stat-label"><span>${label}</span><b class="num">${fmt(eaten)}/${fmt(target)}g</b></div>${meter(eaten, target, cls)}</div>`;
-  const basisTxt = { logged: 'logged', planned: 'planned', typical: 'assumed light' }[W.basis];
+  const basisTxt = (W.basis === 'logged' ? 'logged' : 'none logged yet');
   const row = (k, v, cls = '') => `<div class="kv ${cls}"><span>${k}</span><span class="num">${v}</span></div>`;
 
   const can = [];
@@ -334,7 +334,7 @@ function drawToday() {
     </div>` : ''}
     <div class="card hero">
       <div class="hero-top"><div><div class="big num">${fmt(L.kcal)}</div><div class="l">kcal left of ${fmt(n.target)}</div></div>
-      <div class="burn"><div class="num">${fmt(n.burned || n.exerciseUsed)}</div><div class="l">${n.burned ? 'burned (logged)' : 'training assumed'}</div></div></div>
+      <div class="burn"><div class="num">${fmt(n.burned)}</div><div class="l">${n.burned ? 'burned (logged)' : 'no workout logged'}</div></div></div>
       <div class="stats">${bar('Protein', n.eaten.protein, n.targets.protein, 'protein')}${bar('Carbs', n.eaten.carbs, n.targets.carbs, '')}${bar('Fat', n.eaten.fat, n.targets.fat, 'fat')}${bar('Sugar', n.eaten.sugar, n.targets.sugar, 'sweet')}</div>
     </div>
     <div class="card"><h2>Had today</h2>
@@ -361,7 +361,7 @@ function drawToday() {
     <div class="card"><h2>Next days</h2>
       ${d.next.map((x) => row(`${x.weekday.slice(0, 3)}${x.planned ? ` · ${x.planned.length ? x.planned.map((a) => a.type).join(' + ') : 'rest'}` : ''}`, `${fmt(x.target)} kcal · ${fmt(x.protein)}g P`)).join('')}
       ${L.kcal < 0 && d.next[0] ? `<div class="can-line warn-line">Over by ${fmt(-L.kcal)} today → ${d.next[0].weekday.slice(0, 3)} ≈ ${fmt(d.next[0].target - Math.min(300, Math.round(-L.kcal / 3)))} kcal</div>` : ''}
-      <div class="tiny" style="margin-top:6px">If you land today on target. Unplanned days assume light training.</div>
+      <div class="tiny" style="margin-top:6px">If you land today on target. Training adds to a day once you log it.</div>
     </div>`;
   el.querySelectorAll('[data-tdel]').forEach((b) => b.onclick = async () => {
     await api('data?id=' + b.dataset.tdel, { method: 'DELETE' }); chat.today = null;
@@ -659,7 +659,7 @@ function drawPlan(d) {
       <div class="kv"><span>${n.effectiveOffset === 0 ? 'Daily balance' : n.effectiveOffset < 0 ? 'Daily deficit' : 'Daily surplus'}</span><span class="num">${fmt(Math.abs(n.effectiveOffset))} kcal${n.effectiveOffset !== n.offset ? ' (capped for safety)' : ''}</span></div>
       <div class="kv"><span>Average daily target</span><span class="num">${fmt(n.avgTarget)} kcal</span></div>
       <div class="kv"><span>Protein</span><span class="num">${n.protein} g (${n.proteinPerKgFFM} g/kg lean)</span></div>
-      <div class="kv"><span>Training burn (low-balled)</span><span class="num">${fmt(n.typicalExercise)} kcal/day</span></div>
+      <div class="kv"><span>Avg logged training burn</span><span class="num">${fmt(n.typicalExercise)} kcal/day</span></div>
       <div class="kv"><span>Sessions / week</span><span class="num">${n.avgSessions}</span></div>
       <div class="kv"><span>Self-calibration</span><span class="num">${n.calibration ? `${sign(n.calibration.adjust)} kcal` : 'after 2 wks of data'}</span></div>
     </div>

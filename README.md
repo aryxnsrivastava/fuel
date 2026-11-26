@@ -76,7 +76,7 @@ This opens http://localhost:3000 with a local embedded database in `.localdb/` a
 ## How the coach works
 
 - **Food** is estimated by the AI and nudged about 10% high, because people under-report oil, sauces and drinks. Named restaurants and brands can be checked against real published nutrition (only after you tap **Allow**).
-- **Workouts** are calculated by the server from Compendium MET values and deliberately under-counted by 20%. Until you log a workout, the day assumes a light one.
+- **Workouts** are calculated by the server from Compendium MET values and deliberately under-counted by 20%. Nothing is assumed: a day only gets workout calories after you tell the chat you trained.
 - **Daily target** = resting burn (Cunningham) × 1.35 + training + goal offset, plus a 3-day payback if you've been over or under. It never drops below the energy-availability safety floor.
 - **Weekly budgets:** sugar and fat flex across the week. A heavy day tightens the days after it.
 - **Self-calibration:** after 2+ weeks of logs and weigh-ins, maintenance is re-estimated from your real weight trend.
