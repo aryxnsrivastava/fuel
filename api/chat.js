@@ -1,20 +1,26 @@
 import { q } from '../lib/db.js';
 import { loadState } from '../lib/store.js';
-import { runChat, applyActions, logHeld } from '../lib/coach.js';
+import { runChat, applyActions, logHeld, savedLookups, saveLookups } from '../lib/coach.js';
 import { currentPlan, generateMealPlan } from '../lib/meals.js';
 import { webSearch } from '../lib/search.js';
 import { handle, send, readBody, tzOf, localDay, addDays } from '../lib/util.js';
 import { todayPayload } from '../lib/views.js';
 
 // Chat history is kept for a rolling 7 days. Recipes are copied to their own table and kept forever.
-const cleanup = () => q(`DELETE FROM messages WHERE created_at < now() - interval '7 days'`);
+// Looked-up nutrition is kept for 6 months.
+const cleanup = () => Promise.all([
+  q(`DELETE FROM messages WHERE created_at < now() - interval '7 days'`),
+  q(`DELETE FROM nutrition_lookups WHERE created_at < now() - interval '6 months'`),
+]);
 
 async function extras(today) {
-  const [recipes, plan] = await Promise.all([
+  const [recipes, plan, lookups] = await Promise.all([
     q('SELECT id, data FROM recipes ORDER BY id DESC LIMIT 40'),
     currentPlan(today),
+    savedLookups(),
   ]);
   return {
+    lookups,
     recipes: recipes.map((r) => ({ id: r.id, name: r.data.name, kcal: r.data.kcal, protein: r.data.protein })),
     mealPlan: plan?.data ? {
       request: plan.data.request,
@@ -33,6 +39,15 @@ async function turn({ today, tz, text, searchResults, saveUser, held = null, sin
   const { reply, actions } = await runChat(state, recent, history, text, { ...(await extras(today)), nowLocal: new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()), held, declined }, searchResults);
   const { changes, recipes, mealPlanRequest, pendingSearch } = await applyActions(actions, state, today, { allowSearch: !searchResults && !declined, held: searchResults || declined ? held || [] : null, since });
 
+  if (searchResults?.length && !declined) {
+    // remember what this lookup found for 6 months (not the fallback estimates)
+    const ids = changes.filter((c) => c.kind === 'food' && c.fromSearch).map((c) => c.id);
+    if (ids.length) {
+      const rows = await q('SELECT data FROM entries WHERE id = ANY($1)', [ids]);
+      let source = null; try { source = new URL(searchResults[0].url).hostname.replace(/^www\./, ''); } catch {}
+      await saveLookups(rows.map((r) => r.data), source);
+    }
+  }
   let fresh = await loadState(today);
   if (mealPlanRequest !== undefined) {
     const mp = await generateMealPlan(fresh.state, tz, mealPlanRequest);
