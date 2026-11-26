@@ -1,6 +1,6 @@
 import { q } from '../lib/db.js';
 import { loadState } from '../lib/store.js';
-import { runChat, applyActions } from '../lib/coach.js';
+import { runChat, applyActions, logHeld } from '../lib/coach.js';
 import { currentPlan, generateMealPlan } from '../lib/meals.js';
 import { webSearch } from '../lib/search.js';
 import { handle, send, readBody, tzOf, localDay, addDays } from '../lib/util.js';
@@ -26,12 +26,12 @@ async function extras(today) {
 }
 
 // One full turn: model -> actions -> optional meal-plan regen -> save messages.
-async function turn({ today, tz, text, searchResults, saveUser }) {
+async function turn({ today, tz, text, searchResults, saveUser, held = null, since = null, declined = false }) {
   const { state, entries } = await loadState(today);
   const history = (await q(`SELECT role, content FROM messages ORDER BY id DESC LIMIT 8`)).reverse();
   const recent = entries.filter((e) => e.day >= addDays(today, -2));
-  const { reply, actions } = await runChat(state, recent, history, text, { ...(await extras(today)), nowLocal: new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()) }, searchResults);
-  const { changes, recipes, mealPlanRequest, pendingSearch } = await applyActions(actions, state, today, { allowSearch: !searchResults });
+  const { reply, actions } = await runChat(state, recent, history, text, { ...(await extras(today)), nowLocal: new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()), held, declined }, searchResults);
+  const { changes, recipes, mealPlanRequest, pendingSearch } = await applyActions(actions, state, today, { allowSearch: !searchResults && !declined, held: searchResults || declined ? held || [] : null, since });
 
   let fresh = await loadState(today);
   if (mealPlanRequest !== undefined) {
@@ -64,16 +64,42 @@ export default (req, res) => handle(req, res, async () => {
     // Web search permission: { searchDecision: { messageId, allow: true|false } }
     if (body.searchDecision) {
       const id = Number(body.searchDecision.messageId);
-      const rows = await q('SELECT id, meta FROM messages WHERE id = $1', [id]);
+      const rows = await q('SELECT id, meta, created_at FROM messages WHERE id = $1', [id]);
       const meta = rows[0]?.meta;
       if (!meta?.search || meta.search.status !== 'pending') return send(res, 409, { error: 'That search request has expired.' });
       const allow = !!body.searchDecision.allow;
+      const held = meta.search.held || [];
       meta.search.status = allow ? 'approved' : 'declined';
       await q('UPDATE messages SET meta = $2 WHERE id = $1', [id, JSON.stringify(meta)]);
-      if (!allow) return send(res, 200, { declined: true });
-      const results = await webSearch(meta.search.query);
+      // food logged by the question's turn (to avoid duplicates) = anything after the reply before that question
+      const since = (await q('SELECT max(created_at) AS t FROM messages WHERE id < $1', [id - 1]))[0]?.t || new Date(0);
+      if (!allow) {
+        if (held.length) {
+          // declined: log the held estimates once, no AI call needed
+          const changes = await logHeld(held);
+          const saved = (await q('INSERT INTO messages (role, content, meta) VALUES ($1, $2, $3) RETURNING id, role, content, meta, created_at', ['assistant', 'Logged with my estimates.', JSON.stringify({ changes })]))[0];
+          const { state, entries } = await loadState(today);
+          return send(res, 200, { declined: true, message: saved, today: todayPayload(state, entries) });
+        }
+        // nothing was held (the model didn't estimate it yet): ask for estimates now
+        return send(res, 200, { declined: true, ...(await turn({ today, tz, text: meta.search.question, saveUser: false, held: [], since, declined: true })) });
+      }
+      let results;
+      try { results = await webSearch(meta.search.query); }
+      catch (e) {
+        // search failed: don't lose the food, log the estimates and pass the error on
+        if (held.length) { await logHeld(held); meta.search.held = []; await q('UPDATE messages SET meta = $2 WHERE id = $1', [id, JSON.stringify(meta)]); }
+        throw e;
+      }
       if (process.env.DEBUG_AI === '1') console.log('[search]', meta.search.query, JSON.stringify(results).slice(0, 3000));
-      const out = await turn({ today, tz, text: meta.search.question, searchResults: results, saveUser: false });
+      let out;
+      try { out = await turn({ today, tz, text: meta.search.question, searchResults: results, saveUser: false, held, since }); }
+      catch (e) {
+        // AI failed (e.g. free-tier limit): nothing was logged, so reopen the card to try again
+        meta.search.status = 'pending';
+        await q('UPDATE messages SET meta = $2 WHERE id = $1', [id, JSON.stringify(meta)]);
+        throw e;
+      }
       return send(res, 200, out);
     }
 

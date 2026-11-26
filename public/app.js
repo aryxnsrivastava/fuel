@@ -200,8 +200,12 @@ async function decideSearch(messageId, allow) {
   chat.busy = allow; drawMessages();
   try {
     const d = await api('chat', { method: 'POST', body: { searchDecision: { messageId, allow } } });
-    if (d.message) { chat.messages.push(d.message); chat.today = d.today; drawStrip(); }
+    if (d.message) chat.messages.push(d.message);
+    if (d.today) { chat.today = d.today; drawStrip(); }
+    chat.busy = false; drawMessages();
+    return d;
   } catch (e) {
+    if (m?.meta?.search && allow) m.meta.search.status = 'pending'; // the server reopens it, so you can tap again
     if (e.message !== 'locked') chat.messages.push({ role: 'assistant', content: e.message, error: true });
   }
   chat.busy = false; drawMessages();
@@ -367,7 +371,14 @@ function drawToday() {
     await api('data?id=' + b.dataset.tdel, { method: 'DELETE' }); chat.today = null;
     todayData = await api('data?view=day'); drawToday(); toast('Entry removed');
   });
-  el.querySelectorAll('[data-search]').forEach((b) => b.onclick = async () => { await decideSearch(Number(b.dataset.search), b.dataset.allow === '1'); todayChat = null; renderToday(); });
+  el.querySelectorAll('[data-search]').forEach((b) => b.onclick = async () => {
+    const allow = b.dataset.allow === '1';
+    if (todayChat?.reply?.meta?.search) todayChat.reply.meta.search.status = allow ? 'approved' : 'declined';
+    if (allow && todayChat) { todayChat = { user: todayChat.user, reply: null }; drawToday(); }
+    const d = await decideSearch(Number(b.dataset.search), allow);
+    if (d?.message && todayChat) todayChat = { user: todayChat.user, reply: d.message };
+    todayData = await api('data?view=day'); drawToday();
+  });
   if (todayChat) el.scrollTop = 0;
 }
 
